@@ -1,4 +1,7 @@
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextBrowser, QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
+    QTextBrowser, QSpacerItem, QSizePolicy, QListWidget, QListWidgetItem
+)
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt
 from qfluentwidgets import TogglePushButton, DropDownPushButton, RoundMenu, Action, PrimaryPushButton
@@ -8,103 +11,151 @@ class LegalGuide(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # Инициализация переменных
-        self.law_type = ''
-        self.law_type_buttons = []
-        self.law_type_map = {
+        # Словарь с кодами и полными названиями законов
+        self.law_codes = {
             'УК': ('uk', 'УГОЛОВНЫЙ КОДЕКС'),
             'ТК': ('tk', 'ТРУДОВОЙ КОДЕКС'),
             'ГК': ('gk', 'ГРАЖДАНСКИЙ КОДЕКС'),
             'КОАП': ('koap', 'КОДЕКС ОБ АДМИНИСТРАТИВНЫХ ПРАВОНАРУШЕНИЯХ'),
             'Конституция': ('konstitucia', 'КОНСТИТУЦИЯ'),
-            'ЗК': ('zk', 'ЗЕМЕЛЬНЫЙ КОДЕКС')
+            'ЗК': ('zk', 'ЗЕМЕЛЬНЫЙ КОДЕКС'),
+            'ЖК': ('jk', 'ЖИЛИЩНЫЙ КОДЕКС'),
+            'УПК': ('upk', 'УГОЛОВНО-ПРОЦЕССУАЛЬНЫЙ КОДЕКС')
         }
 
-        # Инициализация пользовательского интерфейса
+        # Инициализация атрибутов
+        self.selected_law_code = ''
+        self.law_code_buttons = []
+        self.search_history = []
+
         self.initUI()
 
     def initUI(self):
-        # Установка заголовка окна
         self.setWindowTitle("Правовой справочник")
-
-        # Установка шрифта
         self.setFont(QFont('Segoe UI', 12))
-
-        # Установка размеров окна
         self.setGeometry(100, 100, 800, 600)
-
-        # Установка иконки приложения
         self.setWindowIcon(QIcon('icon.png'))
 
-        # Создание центрального виджета и главного макета
+        # Основные элементы интерфейса
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
 
         # Панель выбора типа закона
+        self.create_law_code_panel(main_layout)
+
+        # Панель поиска
+        self.create_search_panel(main_layout)
+
+        # Текстовый браузер для отображения результатов поиска
+        self.law_text = QTextBrowser()
+        main_layout.addWidget(self.law_text)
+
+    # Создание панели выбора типа закона
+    def create_law_code_panel(self, main_layout):
         law_type_panel = QWidget()
         law_type_layout = QVBoxLayout(law_type_panel)
+        law_type_panel.setFixedWidth(200)
         main_layout.addWidget(law_type_panel)
 
         law_type_label = QLabel("Выберите вид закона")
         law_type_layout.addWidget(law_type_label)
 
-        # Добавление кнопок выбора типа закона
-        self.add_law_type_button(law_type_layout, "УК")
-        self.add_law_type_button(law_type_layout, "ТК")
-        self.add_law_type_button(law_type_layout, "ГК")
-        self.add_law_type_button(law_type_layout, "КОАП")
-        self.add_law_type_button(law_type_layout, "Конституция")
+        # Кнопки для основных типов законов
+        for law_code in ["УК", "ТК", "ГК", "КОАП", "Конституция"]:
+            self.add_law_code_button(law_type_layout, law_code)
 
-        # Кнопка для дополнительных типов законов
+        # Кнопка "Еще" для раскрывающегося меню
         more_laws_button = DropDownPushButton('...')
+        more_laws_button.setFixedWidth(150)
         more_laws_menu = RoundMenu(parent=more_laws_button)
-        more_laws_menu.addAction(Action('ЗК', triggered=lambda: self.law_type_selected("ЗК", None)))
+        more_laws_menu.addAction(Action('ЗК', triggered=lambda: self.law_code_selected("ЗК", more_laws_button)))
+        more_laws_menu.addAction(Action('ЖК', triggered=lambda: self.law_code_selected("ЖК", more_laws_button)))
+        more_laws_menu.addAction(Action('УПК', triggered=lambda: self.law_code_selected("УПК", more_laws_button)))
         more_laws_button.setMenu(more_laws_menu)
         law_type_layout.addWidget(more_laws_button)
 
         law_type_layout.addStretch(1)
 
-        # Панель поиска
+        # Заголовок истории поиска
+        history_label = QLabel("История поиска")
+        law_type_layout.addWidget(history_label)
+
+        # Список истории поиска
+        self.history_list = QListWidget()
+        self.history_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.history_list.itemClicked.connect(self.on_history_item_clicked)
+        law_type_layout.addWidget(self.history_list)
+
+    # Создание панели поиска
+    def create_search_panel(self, main_layout):
         search_panel = QWidget()
         search_layout = QVBoxLayout(search_panel)
         search_panel.setFixedWidth(200)
         main_layout.addWidget(search_panel)
 
+        # Заголовок панели поиска
         search_label = QLabel("Введите номер закона")
         search_layout.addWidget(search_label)
 
+        # Поле ввода номера закона
         self.law_number_entry = QLineEdit()
         search_layout.addWidget(self.law_number_entry)
 
+        # Кнопка поиска
         search_button = PrimaryPushButton('Поиск')
+        search_button.setFixedWidth(150)
         search_button.clicked.connect(self.search_law)
         search_layout.addWidget(search_button)
 
-        self.law_text = QTextBrowser()
-        main_layout.addWidget(self.law_text)
-
-        # Пространство для выравнивания QTextBrowser вверху
+        # Растягивающий элемент на панели поиска
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         search_layout.addSpacerItem(spacer)
 
-    # Добавление кнопки выбора типа закона
-    def add_law_type_button(self, layout, button_text):
+    # Добавить кнопку для выбора типа закона
+    def add_law_code_button(self, layout, button_text):
         button = TogglePushButton(button_text)
-        button.clicked.connect(lambda: self.law_type_selected(button_text, button))
+        button.setFixedWidth(150)
+        button.clicked.connect(lambda: self.law_code_selected(button_text, button))
         layout.addWidget(button)
-        self.law_type_buttons.append(button)
+        self.law_code_buttons.append(button)
 
     # Обработчик выбора типа закона
-    def law_type_selected(self, law_type, selected_button):
-        self.law_type, full_law_name = self.law_type_map[law_type]
-        for button in self.law_type_buttons:
+    def law_code_selected(self, law_code, selected_button):
+        self.selected_law_code, full_law_name = self.law_codes[law_code]
+        # Сбросить выделение у всех кнопок, кроме выбранной
+        for button in self.law_code_buttons:
             if button is not selected_button:
                 button.setChecked(False)
         self.law_text.clear()
         self.law_text.append(f"Выбран тип закона: {full_law_name}")
 
-    # Обработчик нажатия кнопки поиска
+    # Поиск закона
     def search_law(self):
         law_number = self.law_number_entry.text()
-        search_law(self.law_type, law_number, self.law_text)
+        if self.selected_law_code:
+            law_full_name = next(full_name for short, full_name in self.law_codes.values() if short == self.selected_law_code)
+            success = search_law(self.selected_law_code, law_number, self.law_text)
+            if success:
+                self.update_search_history(law_number, law_full_name)
+        else:
+            self.law_text.append('Пожалуйста, выберите тип закона.')
+
+    # Обновить историю поиска
+    def update_search_history(self, law_number, law_full_name):
+        history_entry = f"{law_number} {law_full_name}"
+        if history_entry not in self.search_history:
+            self.search_history.append(history_entry)
+            self.history_list.addItem(history_entry)
+
+    # Обработчик клика по элементу истории поиска
+    def on_history_item_clicked(self, item):
+        history_entry = item.text()
+        law_number, law_full_name = history_entry.split(' ', 1)
+        for law_code, (short_name, full_name) in self.law_codes.items():
+            if full_name == law_full_name:
+                self.selected_law_code = short_name
+                self.law_number_entry.setText(law_number)
+                self.law_code_selected(law_code, None)
+                search_law(self.selected_law_code, law_number, self.law_text)
+                break
